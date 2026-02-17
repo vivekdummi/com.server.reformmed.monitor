@@ -1,0 +1,91 @@
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reformmed_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reformmed_api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      API_SECRET: ${API_SECRET}
+    ports:
+      - "8000:8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  checker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reformmed_checker
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_APP_PASS: ${GMAIL_APP_PASS}
+      ALERT_TO: ${ALERT_TO}
+      OFFLINE_AFTER_SECS: ${OFFLINE_AFTER_SECS:-30}
+      CHECK_INTERVAL_SECS: ${CHECK_INTERVAL_SECS:-10}
+      CPU_ALERT_THRESH: ${CPU_ALERT_THRESH:-90}
+      RAM_ALERT_THRESH: ${RAM_ALERT_THRESH:-90}
+      DISK_ALERT_THRESH: ${DISK_ALERT_THRESH:-85}
+      TEMP_ALERT_THRESH: ${TEMP_ALERT_THRESH:-80}
+    command: python offline_checker.py
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: reformmed_grafana
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: "smtp.gmail.com:465"
+      GF_SMTP_USER: ${GMAIL_USER}
+      GF_SMTP_PASSWORD: ${GMAIL_APP_PASS}
+      GF_SMTP_FROM_ADDRESS: ${GMAIL_USER}
+      GF_SMTP_FROM_NAME: "REFORMMED Monitor"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  grafana_data:

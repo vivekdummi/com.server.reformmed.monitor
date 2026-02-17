@@ -1,0 +1,21 @@
+# Never commit secrets
+server/.env
+*.env
+!server/.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres_data/
+grafana_data/
