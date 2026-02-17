@@ -1,6 +1,6 @@
 # Never commit secrets
 server/.env
-*.env
+.env
 !server/.env.example
 
 # Python
@@ -15,7 +15,3 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
-
-# Docker volumes
-postgres_data/
-grafana_data/
