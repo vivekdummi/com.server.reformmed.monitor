@@ -1,4 +1,3 @@
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -56,13 +55,34 @@ services:
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_APP_PASS: ${GMAIL_APP_PASS}
       ALERT_TO: ${ALERT_TO}
-      OFFLINE_AFTER_SECS: ${OFFLINE_AFTER_SECS:-30}
-      CHECK_INTERVAL_SECS: ${CHECK_INTERVAL_SECS:-10}
+      OFFLINE_AFTER_SECS: ${OFFLINE_AFTER_SECS:-10}
+      CHECK_INTERVAL_SECS: ${CHECK_INTERVAL_SECS:-3}
       CPU_ALERT_THRESH: ${CPU_ALERT_THRESH:-90}
       RAM_ALERT_THRESH: ${RAM_ALERT_THRESH:-90}
       DISK_ALERT_THRESH: ${DISK_ALERT_THRESH:-85}
       TEMP_ALERT_THRESH: ${TEMP_ALERT_THRESH:-80}
     command: python offline_checker.py
+
+  dashboard_manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reformmed_dashboard_manager
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_USER: admin
+      GRAFANA_PASS: ${GRAFANA_PASS}
+      GRAFANA_DS_UID: PCC52D03280B7034C
+    command: python dashboard_manager.py
 
   grafana:
     image: grafana/grafana:11.2.0
@@ -74,12 +94,6 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SMTP_ENABLED: "true"
-      GF_SMTP_HOST: "smtp.gmail.com:465"
-      GF_SMTP_USER: ${GMAIL_USER}
-      GF_SMTP_PASSWORD: ${GMAIL_APP_PASS}
-      GF_SMTP_FROM_ADDRESS: ${GMAIL_USER}
-      GF_SMTP_FROM_NAME: "REFORMMED Monitor"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning

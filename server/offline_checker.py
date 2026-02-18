@@ -257,6 +257,12 @@ async def check_machines(pool):
                 for p in parts:
                     pct = p.get("percent", 0)
                     mp  = p.get("mountpoint", "?")
+                    dev = p.get("device", "")
+                    # Skip snap loop devices, tmpfs, overlay — always 100% by design
+                    if any(x in dev for x in ["/dev/loop", "tmpfs", "overlay", "shm"]):
+                        continue
+                    if any(x in mp for x in ["/snap/", "/run/", "/sys/", "/proc/"]):
+                        continue
                     if pct >= DISK_ALERT_THRESH:
                         key = f"{tname}_disk_{mp}_high"
                         if should_alert(key):
