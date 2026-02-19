@@ -2,103 +2,89 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: reformmed_postgres
-    restart: always
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
-      retries: 10
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: reformmed_api
-    restart: always
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
-      API_SECRET: ${API_SECRET}
-    ports:
-      - "8000:8000"
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
-
-  checker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: reformmed_checker
-    restart: always
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
-      GMAIL_USER: ${GMAIL_USER}
-      GMAIL_APP_PASS: ${GMAIL_APP_PASS}
-      ALERT_TO: ${ALERT_TO}
-      OFFLINE_AFTER_SECS: ${OFFLINE_AFTER_SECS:-10}
-      CHECK_INTERVAL_SECS: ${CHECK_INTERVAL_SECS:-3}
-      CPU_ALERT_THRESH: ${CPU_ALERT_THRESH:-90}
-      RAM_ALERT_THRESH: ${RAM_ALERT_THRESH:-90}
-      DISK_ALERT_THRESH: ${DISK_ALERT_THRESH:-85}
-      TEMP_ALERT_THRESH: ${TEMP_ALERT_THRESH:-80}
-    command: python offline_checker.py
-
-  dashboard_manager:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: reformmed_dashboard_manager
-    restart: always
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
-      GRAFANA_URL: http://grafana:3000
-      GRAFANA_USER: admin
-      GRAFANA_PASS: ${GRAFANA_PASS}
-      GRAFANA_DS_UID: PCC52D03280B7034C
-    command: python dashboard_manager.py
+      retries: 5
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.2.0
     container_name: reformmed_grafana
-    restart: always
-    depends_on:
-      - postgres
     environment:
-      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
-      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
     ports:
       - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: reformmed_api
+    command: python main.py
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: reformmed_postgres
+      POSTGRES_PORT: 5432
+      API_SECRET: ${API_SECRET}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  checker:
+    build: .
+    container_name: reformmed_checker
+    command: python offline_checker.py
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: reformmed_postgres
+      POSTGRES_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard_manager:
+    build: .
+    container_name: reformmed_dashboard_manager
+    command: python dashboard_manager.py
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: reformmed_postgres
+      POSTGRES_PORT: 5432
+      GRAFANA_USER: ${GRAFANA_USER}
+      GRAFANA_PASS: ${GRAFANA_PASS}
+      GRAFANA_URL: http://reformmed_grafana:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      grafana:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   postgres_data:
